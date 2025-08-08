@@ -76,8 +76,7 @@ def whatsapp_webhook():
             send_text(from_number, "✅ Mobile app request has been submitted.")
 
     else:
-        # أول رسالة من العميل
-        send_text(from_number, "👋 أهلاً وسهلاً بك في شركتنا!\nنحن سعداء بخدمتك ❤️")
+        # حذف رسالة الترحيب النصية، فقط ارسال اختيار اللغة فورًا
         send_template(from_number, TEMPLATE_CHOOSE_LANGUAGE)
 
     return "OK", 200
