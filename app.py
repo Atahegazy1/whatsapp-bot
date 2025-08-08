@@ -4,10 +4,11 @@ import os
 
 app = Flask(__name__)
 
-# بيانات Twilio
+# بيانات Twilio من المتغيرات البيئية
 ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 FROM_NUMBER = "whatsapp:+14155238886"  # رقم واتساب الخاص بـ Twilio
+
 client = Client(ACCOUNT_SID, AUTH_TOKEN)
 
 # Content SIDs من Twilio (غيّر القيم دي بالـ SIDs الحقيقية بتاعتك)
@@ -19,6 +20,7 @@ TEMPLATE_ORDER_EN = "HX66d98fc783df105eab8bbb60fd95f7c7"
 
 # دالة إرسال Template
 def send_template(to, content_sid):
+    print(f"Sending template {content_sid} to {to}")  # طباعة للتتبع
     client.messages.create(
         from_=FROM_NUMBER,
         to=to,
@@ -27,6 +29,7 @@ def send_template(to, content_sid):
 
 # دالة إرسال نصوص عادية
 def send_text(to, body):
+    print(f"Sending text '{body}' to {to}")  # طباعة للتتبع
     client.messages.create(
         from_=FROM_NUMBER,
         to=to,
@@ -36,8 +39,9 @@ def send_text(to, body):
 @app.route("/whatsapp", methods=["POST"])
 def whatsapp_webhook():
     data = request.form.to_dict()
-    from_number = data.get("From")
+    print("Received data:", data)  # طباعة بيانات الطلب الوارد
 
+    from_number = data.get("From")
     payload = data.get("ButtonPayload") or data.get("ListSelectionId")
 
     if payload:
