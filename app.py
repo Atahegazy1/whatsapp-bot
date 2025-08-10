@@ -1,63 +1,104 @@
 from flask import Flask, request
-from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
+import os
 
 app = Flask(__name__)
 
-# تخزين الحالات مؤقتاً في الذاكرة (ينفع لاحقًا نستبدله بقاعدة بيانات)
+# بيانات Twilio (حطهم في متغيرات البيئة)
+ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+FROM_NUMBER = "whatsapp:+14155238886"  # رقم واتساب Sandbox من Twilio
+client = Client(ACCOUNT_SID, AUTH_TOKEN)
+
+# دالة إرسال رسالة نصية عادية
+def send_text(to, body):
+    message = client.messages.create(
+        from_=FROM_NUMBER,
+        to=to,
+        body=body
+    )
+    print(f"Sent message: {message.sid} to {to}")
+
+# قاعدة بيانات مؤقتة (بسيطة) لتخزين حالة المستخدم (في الذاكرة)
 user_states = {}
 
 @app.route("/whatsapp", methods=["POST"])
-def whatsapp_reply():
-    from_number = request.form.get("From")
-    msg = request.form.get("Body", "").strip().lower()
+def whatsapp_webhook():
+    data = request.form.to_dict()
+    from_number = data.get("From")  # رقم المرسل
+    incoming_msg = data.get("Body", "").strip().lower()
 
-    resp = MessagingResponse()
-    reply = resp.message()
+    print(f"Received message from {from_number}: {incoming_msg}")
 
-    # لو أول مرة المستخدم يتواصل
-    if from_number not in user_states:
-        user_states[from_number] = "choose_language"
-        reply.body("اختر اللغة:\n1️⃣ عربي\n2️⃣ English")
-        return str(resp)
+    # الحالة الحالية للمستخدم، لو ما موجودة نخليها "start"
+    state = user_states.get(from_number, "start")
 
-    state = user_states[from_number]
+    if state == "start":
+        # نرسل ترحيب واختيارات اللغة
+        msg = (
+            "أهلاً! من فضلك اختر اللغة بالرقم:\n"
+            "1. العربية\n"
+            "2. English"
+        )
+        send_text(from_number, msg)
+        user_states[from_number] = "language_selected"
 
-    # المرحلة الأولى: اختيار اللغة
-    if state == "choose_language":
-        if msg == "1":
-            user_states[from_number] = "menu_ar"
-            reply.body("أهلاً بك! 😊\nاختر من القائمة:\n1️⃣ معلومات\n2️⃣ تواصل معنا\n0️⃣ رجوع")
-        elif msg == "2":
-            user_states[from_number] = "menu_en"
-            reply.body("Welcome! 😊\nChoose from menu:\n1️⃣ Info\n2️⃣ Contact us\n0️⃣ Back")
+    elif state == "language_selected":
+        if incoming_msg == "1":
+            # عربي - عرض الخدمات
+            msg = (
+                "اختر الخدمة:\n"
+                "1. معلومات عن الشركة\n"
+                "2. طلب خدمة\n"
+                "3. الدعم الفني"
+            )
+            send_text(from_number, msg)
+            user_states[from_number] = "service_ar"
+        elif incoming_msg == "2":
+            # English - show services
+            msg = (
+                "Please choose a service:\n"
+                "1. About the company\n"
+                "2. Order a service\n"
+                "3. Technical support"
+            )
+            send_text(from_number, msg)
+            user_states[from_number] = "service_en"
         else:
-            reply.body("الرجاء اختيار:\n1️⃣ عربي\n2️⃣ English")
+            send_text(from_number, "من فضلك أرسل 1 للعربية أو 2 للإنجليزية.")
 
-    # القائمة العربية
-    elif state == "menu_ar":
-        if msg == "1":
-            reply.body("📄 هذه هي المعلومات المطلوبة.")
-        elif msg == "2":
-            reply.body("📞 يمكنك التواصل معنا على: example@example.com")
-        elif msg == "0":
-            user_states[from_number] = "choose_language"
-            reply.body("اختر اللغة:\n1️⃣ عربي\n2️⃣ English")
+    elif state == "service_ar":
+        if incoming_msg == "1":
+            send_text(from_number, "📌 نحن شركة متخصصة في تقديم أفضل الخدمات التقنية.")
+            user_states[from_number] = "language_selected"  # نرجع للاختيار
+        elif incoming_msg == "2":
+            send_text(from_number, "يرجى إرسال طلبك، وسنقوم بمعالجته.")
+            user_states[from_number] = "language_selected"
+        elif incoming_msg == "3":
+            send_text(from_number, "📞 للتواصل مع الدعم، أرسل لنا مشكلتك وسنقوم بالرد فورًا.")
+            user_states[from_number] = "language_selected"
         else:
-            reply.body("❌ اختيار غير صحيح.\nاختر:\n1️⃣ معلومات\n2️⃣ تواصل معنا\n0️⃣ رجوع")
+            send_text(from_number, "يرجى اختيار رقم من 1 إلى 3.")
 
-    # القائمة الإنجليزية
-    elif state == "menu_en":
-        if msg == "1":
-            reply.body("📄 Here is the requested information.")
-        elif msg == "2":
-            reply.body("📞 You can contact us at: example@example.com")
-        elif msg == "0":
-            user_states[from_number] = "choose_language"
-            reply.body("Choose language:\n1️⃣ Arabic\n2️⃣ English")
+    elif state == "service_en":
+        if incoming_msg == "1":
+            send_text(from_number, "📌 We are a company specialized in providing the best tech services.")
+            user_states[from_number] = "language_selected"
+        elif incoming_msg == "2":
+            send_text(from_number, "Please send your order request, and we will process it.")
+            user_states[from_number] = "language_selected"
+        elif incoming_msg == "3":
+            send_text(from_number, "📞 To contact support, please send your issue and we will reply promptly.")
+            user_states[from_number] = "language_selected"
         else:
-            reply.body("❌ Invalid choice.\nChoose:\n1️⃣ Info\n2️⃣ Contact us\n0️⃣ Back")
+            send_text(from_number, "Please choose a number between 1 and 3.")
 
-    return str(resp)
+    else:
+        send_text(from_number, "حدث خطأ، يرجى إعادة المحاولة.")
+        user_states[from_number] = "start"
+
+    return "OK", 200
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(port=5000)
