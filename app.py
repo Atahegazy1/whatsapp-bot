@@ -1,89 +1,63 @@
 from flask import Flask, request
-from twilio.rest import Client
-import os
+from twilio.twiml.messaging_response import MessagingResponse
 
 app = Flask(__name__)
 
-# بيانات Twilio من المتغيرات البيئية
-ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
-AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-FROM_NUMBER = "whatsapp:+14155238886"  # رقم واتساب الخاص بـ Twilio
-
-client = Client(ACCOUNT_SID, AUTH_TOKEN)
-
-# Content SIDs من Twilio (غيّر القيم دي بالـ SIDs الحقيقية بتاعتك)
-TEMPLATE_CHOOSE_LANGUAGE = "HX20f316d6fdb0eb434ffa3c7d5de9f27c"
-TEMPLATE_SERVICES_AR = "HX87ba643af656bb847a337b5ee07caf08"
-TEMPLATE_SERVICES_EN = "HXce53e1f86338e0dc594c8e5cb0ec7da9"
-TEMPLATE_ORDER_AR = "HXa904c71f31a01e0c234a6860d98bff06"
-TEMPLATE_ORDER_EN = "HX66d98fc783df105eab8bbb60fd95f7c7"
-
-# دالة إرسال Template
-def send_template(to, content_sid):
-    print(f"Sending template {content_sid} to {to}")  # طباعة للتتبع
-    client.messages.create(
-        from_=FROM_NUMBER,
-        to=to,
-        content_sid=content_sid
-    )
-
-# دالة إرسال نصوص عادية
-def send_text(to, body):
-    print(f"Sending text '{body}' to {to}")  # طباعة للتتبع
-    client.messages.create(
-        from_=FROM_NUMBER,
-        to=to,
-        body=body
-    )
+# تخزين الحالات مؤقتاً في الذاكرة (ينفع لاحقًا نستبدله بقاعدة بيانات)
+user_states = {}
 
 @app.route("/whatsapp", methods=["POST"])
-def whatsapp_webhook():
-    data = request.form.to_dict()
-    print("Received data:", data)  # طباعة بيانات الطلب الوارد
+def whatsapp_reply():
+    from_number = request.form.get("From")
+    msg = request.form.get("Body", "").strip().lower()
 
-    from_number = data.get("From")
-    payload = data.get("ButtonPayload") or data.get("ListSelectionId")
+    resp = MessagingResponse()
+    reply = resp.message()
 
-    if payload:
-        # اختيار اللغة
-        if payload == "LANG_AR":
-            send_template(from_number, TEMPLATE_SERVICES_AR)
-        elif payload == "LANG_EN":
-            send_template(from_number, TEMPLATE_SERVICES_EN)
+    # لو أول مرة المستخدم يتواصل
+    if from_number not in user_states:
+        user_states[from_number] = "choose_language"
+        reply.body("اختر اللغة:\n1️⃣ عربي\n2️⃣ English")
+        return str(resp)
 
-        # خدمات بالعربي
-        elif payload == "SERVICE_INFO_AR":
-            send_text(from_number, "📌 نحن شركة متخصصة في تقديم أفضل الخدمات التقنية.")
-        elif payload == "SERVICE_ORDER_AR":
-            send_template(from_number, TEMPLATE_ORDER_AR)
-        elif payload == "SERVICE_SUPPORT_AR":
-            send_text(from_number, "📞 للتواصل مع الدعم، أرسل لنا مشكلتك وسنقوم بالرد فورًا.")
+    state = user_states[from_number]
 
-        # خدمات بالإنجليزي
-        elif payload == "SERVICE_INFO_EN":
-            send_text(from_number, "📌 We are a company specialized in providing the best tech services.")
-        elif payload == "SERVICE_ORDER_EN":
-            send_template(from_number, TEMPLATE_ORDER_EN)
-        elif payload == "SERVICE_SUPPORT_EN":
-            send_text(from_number, "📞 To contact support, please send your issue and we will reply promptly.")
+    # المرحلة الأولى: اختيار اللغة
+    if state == "choose_language":
+        if msg == "1":
+            user_states[from_number] = "menu_ar"
+            reply.body("أهلاً بك! 😊\nاختر من القائمة:\n1️⃣ معلومات\n2️⃣ تواصل معنا\n0️⃣ رجوع")
+        elif msg == "2":
+            user_states[from_number] = "menu_en"
+            reply.body("Welcome! 😊\nChoose from menu:\n1️⃣ Info\n2️⃣ Contact us\n0️⃣ Back")
+        else:
+            reply.body("الرجاء اختيار:\n1️⃣ عربي\n2️⃣ English")
 
-        # طلب خدمة بالعربي
-        elif payload == "ORDER_WEB_AR":
-            send_text(from_number, "✅ تم تسجيل طلب تصميم موقعك.")
-        elif payload == "ORDER_APP_AR":
-            send_text(from_number, "✅ تم تسجيل طلب تطبيق الموبايل.")
+    # القائمة العربية
+    elif state == "menu_ar":
+        if msg == "1":
+            reply.body("📄 هذه هي المعلومات المطلوبة.")
+        elif msg == "2":
+            reply.body("📞 يمكنك التواصل معنا على: example@example.com")
+        elif msg == "0":
+            user_states[from_number] = "choose_language"
+            reply.body("اختر اللغة:\n1️⃣ عربي\n2️⃣ English")
+        else:
+            reply.body("❌ اختيار غير صحيح.\nاختر:\n1️⃣ معلومات\n2️⃣ تواصل معنا\n0️⃣ رجوع")
 
-        # طلب خدمة بالإنجليزي
-        elif payload == "ORDER_WEB_EN":
-            send_text(from_number, "✅ Website design request has been submitted.")
-        elif payload == "ORDER_APP_EN":
-            send_text(from_number, "✅ Mobile app request has been submitted.")
+    # القائمة الإنجليزية
+    elif state == "menu_en":
+        if msg == "1":
+            reply.body("📄 Here is the requested information.")
+        elif msg == "2":
+            reply.body("📞 You can contact us at: example@example.com")
+        elif msg == "0":
+            user_states[from_number] = "choose_language"
+            reply.body("Choose language:\n1️⃣ Arabic\n2️⃣ English")
+        else:
+            reply.body("❌ Invalid choice.\nChoose:\n1️⃣ Info\n2️⃣ Contact us\n0️⃣ Back")
 
-    else:
-        # حذف رسالة الترحيب النصية، فقط ارسال اختيار اللغة فورًا
-        send_template(from_number, TEMPLATE_CHOOSE_LANGUAGE)
-
-    return "OK", 200
+    return str(resp)
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000)
