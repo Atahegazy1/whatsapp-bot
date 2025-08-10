@@ -7,7 +7,7 @@ app = Flask(__name__)
 # بيانات Twilio (حطهم في متغيرات البيئة)
 ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-FROM_NUMBER = "whatsapp:+14155238886"  # رقم واتساب Sandbox من Twilio
+FROM_NUMBER = "whatsapp:+201555822228"  # رقم واتساب Sandbox من Twilio
 client = Client(ACCOUNT_SID, AUTH_TOKEN)
 
 # دالة إرسال رسالة نصية عادية
